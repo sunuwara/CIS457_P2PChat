@@ -1,27 +1,17 @@
 import socket
 import threading
 import sys
-import time
 
 BUFFER = 4096
 ENCODING = 'UTF-8'
 
+""" Runs the Server """
 class Server:
 
     def __init__(self, myHost, myPort):
         self.host = myHost
         self.port = myPort
         self.run()
-
-    def receive(self, socket, address):
-        while True:
-            receiveMsg = socket.recv(BUFFER)
-            print(f"({str(address[0])}:{int(address[1])}): {receiveMsg.decode(ENCODING)}")
-
-            if not receiveMsg:
-                print(f"({str(address[0])}:{int(address[1])}) has disconnected")
-                socket.close()
-                break
 
     def run(self):
         print(f"Server started at ({self.host}:{self.port})")
@@ -36,64 +26,62 @@ class Server:
         (clientSocket, clientAddress) = serverSocket.accept()
         print(f"Connected to ({str(clientAddress[0])}:{int(clientAddress[1])})")
 
-        receiveThread = threading.Thread(target=self.receive, args=(clientSocket, clientAddress))
+        receiveThread = threading.Thread(target=receive, args=(clientSocket, str(clientAddress[0]), int(clientAddress[1])))
         receiveThread.setDaemon(True)
         receiveThread.start()
 
         while True:
-            try:
-                sendMsg = input("")
-                clientSocket.send(sendMsg.encode(ENCODING))
-            except KeyboardInterrupt:
-                sys.exit(0)
+            send(clientSocket)
 
+""" Runs the Client """
 class Client:
 
     def __init__(self, otherHost, otherPort):
         self.host = otherHost
         self.port = otherPort
-
         self.run()
-
-    def send(self, socket):
-        while True:
-            try:
-                sendMsg = input(" ")
-                socket.send(sendMsg.encode(ENCODING))
-            except KeyboardInterrupt:
-                sys.exit(0)
 
     def run(self):
         clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print(f"Establishing connection with ({self.host}:{self.port})...")
+        print("Establishing connection...")
 
         clientSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         clientSocket.connect((self.host, self.port))
         print(f"Connected to ({self.host}:{self.port})")
 
-        sendThread = threading.Thread(target=self.send, args=(clientSocket,))
+        sendThread = threading.Thread(target=send, args=(clientSocket,))
         sendThread.setDaemon(True)
         sendThread.start()
 
         while True:
-            receiveMsg = clientSocket.recv(BUFFER)
-            print(f"({self.host}:{self.port}): {receiveMsg.decode(ENCODING)}")
+            receive(clientSocket, self.host, self.port)
 
-            if not receiveMsg:
-                print(f"({self.host}:{self.port}) has disconnected")
-                clientSocket.close()
-                break
+""" Sends the message through the socket """
+def send(socket):
+    while True:
+        try:
+            sendMsg = input("")
+            socket.send(sendMsg.encode(ENCODING))
+        except KeyboardInterrupt:
+            sys.exit(0)
 
-def prompt() :
-	sys.stdout.write('You: ')
-	sys.stdout.flush()
+""" Receives the message on socket and prints it out """
+def receive(socket, host, port):
+    while True:
+        receiveMsg = socket.recv(BUFFER)
+        print(f"Friend: {receiveMsg.decode(ENCODING)}")
+
+        if not receiveMsg:
+            print(f"({host}:{port}) has disconnected")
+            socket.close()
+            break
 
 """ Start program """
 if __name__ == '__main__':
 
     # determine if arguments to run program were correct
     if(len(sys.argv) < 3):
-        print("Use Command: python daemon.py $myhostname $myportnumber\n")
+        print("Use Command: python p2pChat.py $myhostname $myportnumber\n")
         sys.exit(0)
 
     # save this client hostname and port number
@@ -101,20 +89,24 @@ if __name__ == '__main__':
     myPort = int(sys.argv[2])
 
     # Establish connection or wait for someone
-    print(f"({myHost} : {myPort}) Waiting to establish connection...")
+    print(f"Welcome ({myHost} : {myPort})!")
+    print("Waiting to establish connection...")
 
-    otherHost = input("Hostname to connect to (or enter 'Wait'): ")
+    # Prompt whether to act as a server or a client
+    otherHost = input("Enter 'wait' or the Hostname to connect to: ")
 
+    # if 'wait' was entered then act as server and wait for connections
     if (otherHost.lower() == 'wait'):
         try:
             server = Server(myHost, myPort)
         except KeyboardInterrupt:
+            print("Unable to start as server!")
             sys.exit(0)
 
+    # otherwise run as client and connect to server acting client
     else:
         try:
-            otherPort = int(input("Port Number to connect to: "))
-
+            otherPort = int(input("Enter the Port Number to connect to: "))
             client = Client(otherHost, otherPort)
         except KeyboardInterrupt:
             sys.exit(0)
